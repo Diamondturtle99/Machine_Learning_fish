@@ -2,6 +2,7 @@ import numpy as np
 import pygame
 import sys
 import time
+import pandas as pd
 
 # Game environment
 class Game:
@@ -53,23 +54,36 @@ class Game:
 
 # Q-Learning agent
 class QLearningAgent:
-    def __init__(self):
+    def __init__(self, agent_id):
         self.Q = np.zeros((10, 10, 4))  # Q-table with 4 possible actions (up, down, left, right)
         self.learning_rate = 0.2  # Adjusted learning rate
         self.discount_factor = 0.99
         self.epsilon = 0.2  # Increased epsilon
         self.state = None
+        self.agent_id = agent_id
 
         # Initialize blue agent's Q-table with higher initial values
         self.initialize_blue_agent()
 
+        # Load existing Q-table if available
+        self.load_q_table_from_csv()
+
     def initialize_blue_agent(self):
         # Assign higher initial values to the blue agent's Q-table
+        self.learning_rate = 0.5
         self.epsilon = 1.0
         self.Q[:, :, 0] = 1.0  # Up action
         self.Q[:, :, 1] = -1.0  # Down action
         self.Q[:, :, 2] = -1.0  # Left action
         self.Q[:, :, 3] = -1.0  # Right action
+
+    def load_q_table_from_csv(self):
+        filename = f'agent{self.agent_id}_qtable.csv'
+        try:
+            df = pd.read_csv(filename)
+            self.Q = df.values.reshape((10, 10, 4))
+        except FileNotFoundError:
+            pass
 
     def get_action(self, state):
         if np.random.rand() < self.epsilon:
@@ -86,11 +100,10 @@ class QLearningAgent:
         self.Q[x][y][action] = (1 - self.learning_rate) * self.Q[x][y][action] + self.learning_rate * (
                 reward + self.discount_factor * np.max(self.Q[next_x][next_y]))
 
-    def save_q_table(self, filename):
-        np.save(filename, self.Q)
-
-    def load_q_table(self, filename):
-        self.Q = np.load(filename)
+    def save_q_table_to_csv(self):
+        filename = f'agent{self.agent_id}_qtable.csv'
+        df = pd.DataFrame(self.Q.reshape(-1, 4), columns=['Up', 'Down', 'Left', 'Right'])
+        df.to_csv(filename, index=False)
 
 
 def draw_game_state(state, target, obstacles):
@@ -119,8 +132,8 @@ def draw_game_state(state, target, obstacles):
 
 def main():
     game = Game()
-    agent1 = QLearningAgent()
-    agent2 = QLearningAgent()
+    agent1 = QLearningAgent(1)
+    agent2 = QLearningAgent(2)
 
     num_episodes = 5000  # Increased number of episodes
     save_interval = 1  # Save Q-table every second
@@ -159,45 +172,38 @@ def main():
 
             # Save Q-table every second
             if elapsed_time >= save_interval:
-                agent1.save_q_table('agent1_qtable.npy')
-                agent2.save_q_table('agent2_qtable.npy')
+                agent1.save_q_table_to_csv()
+                agent2.save_q_table_to_csv()
                 prev_time = current_time
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        pygame.quit()
-                        sys.exit()
 
-            if game.state[0] == game.target and game.state[1] == game.target:
+            if rewards[0] == 1 or rewards[1] == 1:
                 break
 
-    # Save final Q-tables
-    agent1.save_q_table('agent1_qtable.npy')
-    agent2.save_q_table('agent2_qtable.npy')
+        if episode % 100 == 0:
+            print(f"Episode: {episode}, Time elapsed: {time.time() - start_time} seconds")
 
-    end_time = time.time()
-    total_time = end_time - start_time
-    print(f"Training completed in {total_time:.2f} seconds.")
+    pygame.quit()
 
 
-if __name__ == "__main__":
-    pygame.init()
-    display_width, display_height = 800, 800
-    game_display = pygame.display.set_mode((display_width, display_height))
-    pygame.display.set_caption('AI-Fishies!')
+# Initialize Pygame
+pygame.init()
 
-    cell_width = display_width // 10
-    cell_height = display_height // 10
+# Set up the game display
+cell_width, cell_height = 140, 130
+display_width, display_height = 10 * cell_width, 10 * cell_height
+game_display = pygame.display.set_mode((display_width, display_height))
+pygame.display.set_caption('Q-Learning Fish')
 
-    blue = (0, 0, 255)
-    green = (0, 255, 0)
-    red = (255, 0, 0)
-    white = (255, 255, 255)
-    black = (0, 0, 0)
+# Colors
+white = (255, 255, 255)
+blue = (0, 0, 255)
+green = (0, 255, 0)
+red = (255, 0, 0)
+black = (0, 0, 0)
 
-    main()
-
+main()
